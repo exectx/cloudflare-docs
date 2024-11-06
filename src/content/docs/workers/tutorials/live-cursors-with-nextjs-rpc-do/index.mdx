@@ -22,7 +22,7 @@ The application works like this:
 - An ID is generated for each user that navigates to the application, which is used for identifying the WebSocket connection in the Durable Object.
 - Once the WebSocket connection is established, the application sends a message to the WebSocket Durable Object to determine the current number of connected users.
 - A user can close all active WebSocket connections via a Next.js server action that uses an RPC method.
-- It handles WebSocket and mouse movement events to update the location of other users’ cursors in the UI and to send updates about the user’s own cursor, as well as join and leave WebSocket events.
+- It handles WebSocket and mouse movement events to update the location of other users' cursors in the UI and to send updates about the user's own cursor, as well as join and leave WebSocket events.
 
 ![Animated gif of real-time Next.js app for visualizing live cursors](~/assets/images/workers/tutorials/live-cursors-nextjs/demo-live-cursors-nextjs-do.gif)
 
@@ -300,7 +300,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 
 1. Extend the `WorkerEntrypoint` class for RPC:
 	:::note[Note]
-	A service binding to `SessionsRPC` is used here because Durable Object RPC is not yet supported in multiple `wrangler dev` sessions. In this case, two `wrangler dev` sessions are used: one for the Next.js worker and one for the Durable Object worker. In production, however, Durable Object RPC is not an issue. For convenience in local development, a service binding is used instead of directly invoking the Durable Object RPC method.
+	A service binding to `SessionsRPC` is used here because Durable Object RPC is not yet supported in multiple `wrangler dev` sessions. In this case, two `wrangler dev` sessions are used: one for the Next.js Worker and one for the Durable Object Worker. In production, however, Durable Object RPC is not an issue. For convenience in local development, a service binding is used instead of directly invoking the Durable Object RPC method.
 	:::
 
 
@@ -324,7 +324,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	// ...
 	```
 
-1. Run the worker locally:
+1. Run the Worker locally:
 	<PackageManagers type="run" pkg="dev" frame="none" />
 
 1. Add the Worker host as a Next.js public environment variable:
@@ -737,7 +737,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	Deploy the Worker:
 	<PackageManagers type="run" pkg="deploy" frame="none" />
 
-	A URL is generated for the the Worker, which will be used to update Next.js `NEXT_PUBLIC_WS_HOST` environment variable in your `.env.local` file.
+	A URL is generated for the Worker, which will be used to update Next.js `NEXT_PUBLIC_WS_HOST` environment variable in your `.env.local` file.
 
 	```txt title=".env.local" ins={2} del={1}
 	NEXT_PUBLIC_WS_HOST=localhost:8787
@@ -753,7 +753,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 
 ## Summary
 
-In this tutorial, you learned how to integrate Next.js with Durable Objects to build a real-time application to visualize cursors. You also learned how to use Workers' built-in RPC system alongside Next.js server actions. The complete code for this tutorial is available on [Github](https://github.com/exectx/next-live-cursors-do-rpc).
+In this tutorial, you learned how to integrate Next.js with Durable Objects to build a real-time application to visualize cursors. You also learned how to use Workers' built-in RPC system alongside Next.js server actions. The complete code for this tutorial is available on [GitHub](https://github.com/exectx/next-live-cursors-do-rpc).
 
 ## Related resources
 
