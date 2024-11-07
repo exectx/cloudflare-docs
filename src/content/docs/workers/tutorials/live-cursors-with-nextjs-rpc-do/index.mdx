@@ -1,9 +1,9 @@
 ---
-updated: 2024-11-05
+updated: 2024-11-07
 difficulty: Intermediate
 content_type: 📝 Tutorial
 pcx_content_type: tutorial
-title: Live cursors & RPC with Next.js and Durable Objects
+title: Build Live Cursors with Next.js, RPC and Durable Objects
 products:
   - Workers
   - Durable Objects
@@ -28,7 +28,7 @@ The application works like this:
 
 ---
 
-## Create a Next.js Workers Project
+## 1. Create a Next.js Workers Project
 
 <Steps>
 
@@ -55,10 +55,10 @@ The application works like this:
 	cd next-rpc
 	```
 
-	Install [nanoid](https://www.npmjs.com/package/nanoid):
+3. Install [nanoid](https://www.npmjs.com/package/nanoid) so that string IDs can be generated for clients:
 	<PackageManagers type="add" pkg="nanoid" frame="none" />
 
-3. Define workspaces for each Worker:
+4. Define workspaces for each Worker:
 
 	<Tabs> <TabItem label="npm">
 
@@ -100,7 +100,7 @@ The application works like this:
 
 </Steps>
 
-## Create a Durable Object Worker
+## 2. Create a Durable Object Worker
 
 This Worker will manage the Durable Object and also have internal API's
 that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/workers/runtime-apis/bindings/service-bindings/rpc/) class.
@@ -125,9 +125,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	/>
 </Steps>
 
-## Setup Workers
-
-### Worker project
+## 3. Build Durable Object Worker functionality
 <Steps>
 1. In your `worker/wrangler.toml` file, update the Durable Object binding:
 	```toml {4,5,9} title="worker/wrangler.toml"
@@ -141,7 +139,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	tag = "v1"
 	new_classes = ["CursorSessions"]
 	```
-1. Initialize Durable Object class:
+2. Initialize the Durable Object class in your `worker/src/index.ts` file:
 	```ts title="worker/src/index.ts"
 	import { DurableObject } from 'cloudflare:workers';
 
@@ -178,7 +176,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	```
 
 
-1. Update the Durable Object to manage WebSockets:
+3. Update the Durable Object to manage WebSockets:
 	- The main `fetch` handler routes requests with a `/ws` URL to the `CursorSessions` Durable Object where a WebSocket connection is stablished.
 	- The `CursorSessions` class manages WebSocket connections, session states, and broadcasts messages to other connected clients.
 		- When a new WebSocket connection is established, the Durable Object broadcasts a `join` message to all connected clients; similaryly, a `quit` message is broadcasted when a client disconnects.
@@ -298,7 +296,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	```
 
 
-1. Extend the `WorkerEntrypoint` class for RPC:
+4. Extend the `WorkerEntrypoint` class for RPC:
 	:::note[Note]
 	A service binding to `SessionsRPC` is used here because Durable Object RPC is not yet supported in multiple `wrangler dev` sessions. In this case, two `wrangler dev` sessions are used: one for the Next.js Worker and one for the Durable Object Worker. In production, however, Durable Object RPC is not an issue. For convenience in local development, a service binding is used instead of directly invoking the Durable Object RPC method.
 	:::
@@ -324,19 +322,19 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	// ...
 	```
 
-1. Run the Worker locally:
+5. Run the Worker locally:
 	<PackageManagers type="run" pkg="dev" frame="none" />
 
-1. Add the Worker host as a Next.js public environment variable:
+6. Add the Worker host as a Next.js public environment variable:
 	```text title=".env.local" ins={1}
 	NEXT_PUBLIC_WS_HOST=localhost:8787
 	```
 
 </Steps>
 
-### Next.js project
+## 4. Build Next.js Worker functionality
 <Steps>
-1. In your `wrangler.toml` file, declare the external Durable Object binding and the Service binding to `SessionRPC`:
+1. In your `wrangler.toml` file, declare the external Durable Object binding and the Service binding to `SessionsRPC`:
 
 	```toml title="wrangler.toml" ins={10-18}
 	# ... rest of the configuration
@@ -359,8 +357,8 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	entrypoint = "SessionsRPC"
 	```
 
-1. Update your `env.d.ts` file for typesafety:
-	```ts title="env.d.ts"
+2. Update your `env.d.ts` file for typesafety:
+	```ts title="env.d.ts" {2-5}
 	interface CloudflareEnv {
 		CURSOR_SESSIONS: DurableObjectNamespace<
 			import("./worker/src/index").CursorSessions
@@ -369,13 +367,12 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 		ASSETS: Fetcher;
 	}
 	```
-1. Create server actions that make use of RPC methods:
+3. Include Next.js server side logic:
+	- Add a server action to close all active WebSocket connections.
+	- Use the RPC method `closeSessions` from the `RPC_SERVICE` Service binding instead of invoking the Durable Object RPC method because of the limitation mentioned in the note above.
+	- The server component generates unique IDs using `nanoid` to identify the WebSocket connection within the Durable Object.
 
-	The Service binding `RPC_SERVICE` is used instead of invoking Durable Object RPC methods because of the limitation mentioned in the note above.
-
-	This closes everyone's WebSocket connection.
-
-	```tsx title="src/app/page.tsx" {9-10}
+	```tsx title="src/app/page.tsx" {9-10,19,25-27,33}
 	import { getCloudflareContext } from "@opennextjs/cloudflare";
 	import { Cursors } from "./cursor";
 	import { nanoid } from "nanoid";
@@ -416,7 +413,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	}
 	```
 
-1. Create a client component to manage WebSocket and mouse movement events:
+4. Create a client component to manage WebSocket and mouse movement events:
 
 	<Details header="src/app/cursor.tsx">
 	```tsx title="src/app/cursor.tsx"
@@ -704,7 +701,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 		- `get-cursors-response`. Received	when a client sends a `get-cursors` message, which is triggered once the WebSocket connection is open.
 	- It sends the user's cursor coordinates to the WebSocket server, which broadcasts them to all active WebSocket clients.
 
-1. Run Next.js locally:
+5. Run Next.js locally:
 
 	In your `package.json`, include a new script:
 
@@ -726,7 +723,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 </Steps>
 
 
-## Deploy the project
+## 5. Deploy the project
 
 <Steps>
 1. Change into your Durable Object Worker directory:
@@ -744,7 +741,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	NEXT_PUBLIC_WS_HOST=<DEPLOYED-WORKER-HOST>
 	```
 
-1. Change into your root directory and deploy your Next.js app:
+2. Change into your root directory and deploy your Next.js app:
 	<PackageManagers type="run" pkg="deploy" frame="none" />
 
 
