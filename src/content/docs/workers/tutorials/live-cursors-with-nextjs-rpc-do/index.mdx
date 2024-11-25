@@ -177,7 +177,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 
 
 3. Update the Durable Object to manage WebSockets:
-	- The main `fetch` handler routes requests with a `/ws` URL to the `CursorSessions` Durable Object where a WebSocket connection is stablished.
+	- The main `fetch` handler routes requests with a `/ws` URL to the `CursorSessions` Durable Object where a WebSocket connection is established.
 	- The `CursorSessions` class manages WebSocket connections, session states, and broadcasts messages to other connected clients.
 		- When a new WebSocket connection is established, the Durable Object broadcasts a `join` message to all connected clients; similaryly, a `quit` message is broadcasted when a client disconnects.
 		- It tracks each WebSocket client's last cursor position under the `move` message, which is broadcasted to all active clients.
