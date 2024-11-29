@@ -186,7 +186,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 
 
 3. Update the Durable Object to manage WebSockets:
-	```ts title="worker/src/index.ts" {28-33,35-42,57,78,89-99}
+	```ts title="worker/src/index.ts" {29-34,36-43,56,79,89-100}
 	// Rest of the code
 
 	export class CursorSessions extends DurableObject<Env> {
@@ -242,9 +242,9 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 
 		async webSocketClose(ws: WebSocket, code: number) {
 			const id = this.sessions.get(ws)?.id;
-			ws.close();
+			id && this.broadcast({ type: 'quit', id });
 			this.sessions.delete(ws);
-			id && this.broadcast({ type: "quit", id });
+			ws.close();
 		}
 
 		closeSessions() {
@@ -432,71 +432,18 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	import type { Session, WsMessage } from "../../worker/src/index";
 	import { PerfectCursor } from "perfect-cursors";
 
-	export function usePerfectCursor(
-		cb: (point: number[]) => void,
-		point?: number[],
-	) {
-		const [pc] = useState(() => new PerfectCursor(cb));
-
-		useLayoutEffect(() => {
-			if (point) pc.addPoint(point);
-			return () => pc.dispose();
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-		}, [pc]);
-
-		const onPointChange = useCallback(
-			(point: number[]) => pc.addPoint(point),
-			[pc],
-		);
-
-		return onPointChange;
-	}
-
-	type MessageState = { in: string; out: string };
-	type MessageAction = { type: "in" | "out"; message: string };
-	function messageReducer(state: MessageState, action: MessageAction) {
-		switch (action.type) {
-			case "in":
-				return { ...state, in: action.message };
-			case "out":
-				return { ...state, out: action.message };
-			default:
-				return state;
-		}
-	}
-
-	function useHighlight(duration = 250) {
-		const timestampRef = useRef(0);
-		const [highlighted, setHighlighted] = useState(false);
-		function highlight() {
-			timestampRef.current = Date.now();
-			setHighlighted(true);
-			setTimeout(() => {
-				const now = Date.now();
-				if (now - timestampRef.current >= duration) {
-					setHighlighted(false);
-				}
-			}, duration);
-		}
-		return [highlighted, highlight] as const;
-	}
+	const INTERVAL = 55;
 
 	export function Cursors(props: { id: string }) {
-		const [mounted, setMounted] = useState(false);
 		const wsRef = useRef<WebSocket | null>(null);
+		const [cursors, setCursors] = useState<Map<string, Session>>(new Map());
+		const lastSentTimestamp = useRef(0);
 		const [messageState, dispatchMessage] = useReducer(messageReducer, {
 			in: "",
 			out: "",
 		});
-		const [cursors, setCursors] = useState<Map<string, Session>>(new Map());
 		const [highlightedIn, highlightIn] = useHighlight();
 		const [highlightedOut, highlightOut] = useHighlight();
-		const lastSentTimestamp = useRef(0);
-		const sendInterval = 40;
-
-		useEffect(() => {
-			setMounted(true);
-		}, []);
 
 		function startWebSocket() {
 			const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -567,7 +514,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 						y = ev.pageY / window.innerHeight;
 					const now = Date.now();
 					if (
-						now - lastSentTimestamp.current > sendInterval &&
+						now - lastSentTimestamp.current > INTERVAL &&
 						wsRef.current?.readyState === WebSocket.OPEN
 					) {
 						const message: WsMessage = { type: "move", id: props.id, x, y };
@@ -598,6 +545,10 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 				JSON.stringify({ type: "message", data: "Ping" } satisfies WsMessage),
 			);
 		}
+
+		const otherCursors = Array.from(cursors.values()).filter(
+			({ id, x, y }) => id !== props.id && x !== -1 && y !== -1,
+		);
 
 		return (
 			<>
@@ -651,22 +602,22 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 					</button>
 				</div>
 				<div>
-					{mounted &&
-						Array.from(cursors.values()).map(
-							(session) =>
-								props.id !== session.id && (
-									<SvgCursor key={session.id} x={session.x} y={session.y} />
-								),
-						)}
+					{otherCursors.map((session) => (
+						<SvgCursor
+							key={session.id}
+							point={[
+								session.x * window.innerWidth,
+								session.y * window.innerHeight,
+							]}
+						/>
+					))}
 				</div>
 			</>
 		);
 	}
 
-	function SvgCursor(props: { x: number; y: number }) {
+	function SvgCursor({ point }: { point: number[] }) {
 		const refSvg = useRef<SVGSVGElement>(null);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		const point = [window.innerWidth * props.x, window.innerHeight * props.y];
 		const animateCursor = useCallback((point: number[]) => {
 			refSvg.current?.style.setProperty(
 				"transform",
@@ -687,7 +638,7 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 				width="32"
 				viewBox="0 0 32 32"
 				xmlns="http://www.w3.org/2000/svg"
-				className={`absolute -top-[12px] -left-[12px] pointer-events-none ${props.x === -1 || props.y === -1 ? "hidden" : ""}`}
+				className={"absolute -top-[12px] -left-[12px] pointer-events-none"}
 			>
 				<defs>
 					<filter id="shadow" x="-40%" y="-40%" width="180%" height="180%">
@@ -714,6 +665,56 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 				</g>
 			</svg>
 		);
+	}
+
+	function usePerfectCursor(cb: (point: number[]) => void, point?: number[]) {
+		const [pc] = useState(() => new PerfectCursor(cb));
+
+		useLayoutEffect(() => {
+			if (point) pc.addPoint(point);
+			return () => pc.dispose();
+			// eslint-disable-next-line react-hooks/exhaustive-deps
+		}, [pc]);
+
+		useLayoutEffect(() => {
+			PerfectCursor.MAX_INTERVAL = 58;
+		}, []);
+
+		const onPointChange = useCallback(
+			(point: number[]) => pc.addPoint(point),
+			[pc],
+		);
+
+		return onPointChange;
+	}
+
+	type MessageState = { in: string; out: string };
+	type MessageAction = { type: "in" | "out"; message: string };
+	function messageReducer(state: MessageState, action: MessageAction) {
+		switch (action.type) {
+			case "in":
+				return { ...state, in: action.message };
+			case "out":
+				return { ...state, out: action.message };
+			default:
+				return state;
+		}
+	}
+
+	function useHighlight(duration = 250) {
+		const timestampRef = useRef(0);
+		const [highlighted, setHighlighted] = useState(false);
+		function highlight() {
+			timestampRef.current = Date.now();
+			setHighlighted(true);
+			setTimeout(() => {
+				const now = Date.now();
+				if (now - timestampRef.current >= duration) {
+					setHighlighted(false);
+				}
+			}, duration);
+		}
+		return [highlighted, highlight] as const;
 	}
 	```
 	</Details>
@@ -743,8 +744,8 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 				y = ev.pageY / window.innerHeight;
 			const now = Date.now();
 			if (
-				now - lastSentTimestamp.current > sendInterval &&
-				wsRef.current?.readyState === WebSocket.OPEN
+					now - lastSentTimestamp.current > INTERVAL &&
+					wsRef.current?.readyState === WebSocket.OPEN
 			) {
 				const message: WsMessage = { type: "move", id: props.id, x, y };
 				wsRef.current.send(JSON.stringify(message));
@@ -756,10 +757,9 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	```
 
 	Each animated cursor is controlled by a `PerfectCursor` instance, which animates its position along a spline curve defined by the cursor's latest positions:
-	```ts {10-12}
+	```ts {9-11}
 	// SvgCursor react component
 	const refSvg = useRef<SVGSVGElement>(null);
-	const point = [window.innerWidth * props.x, window.innerHeight * props.y];
 	const animateCursor = useCallback((point: number[]) => {
 		refSvg.current?.style.setProperty(
 			"transform",
