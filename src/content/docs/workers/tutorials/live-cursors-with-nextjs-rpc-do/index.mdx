@@ -795,14 +795,30 @@ that will be made available to the Next.js Worker using a [`WorkerEntrypoint`](/
 	Deploy the Worker:
 	<PackageManagers type="run" pkg="deploy" frame="none" />
 
-	A URL is generated for the Worker, which will be used to update Next.js `NEXT_PUBLIC_WS_HOST` environment variable in your `.env.local` file.
+	Copy only the host from the generated Worker URL, excluding the protocol, and set `NEXT_PUBLIC_WS_HOST` in `.env.local` to this value (e.g., `worker-unique-identifier.workers.dev`).
 
 	```txt title="next-rpc/.env.local" ins={2} del={1}
 	NEXT_PUBLIC_WS_HOST=localhost:8787
-	NEXT_PUBLIC_WS_HOST=<DEPLOYED-WORKER-HOST>
+	NEXT_PUBLIC_WS_HOST=worker-unique-identifier.workers.dev
 	```
 
 2. Change into your root directory and deploy your Next.js app:
+	:::note[Optional Step]
+	Invoking Durable Object RPC methods between separate workers are fully supported in Cloudflare deployments. You can opt to use them instead of Service Bindings RPC:
+	```ts title="src/app/page.tsx" ins={7-9} del={4}
+	async function closeSessions() {
+		"use server";
+		const cf = await getCloudflareContext();
+		await cf.env.RPC_SERVICE.closeSessions();
+
+		// Note: Not supported in `wrangler dev`
+		const id = cf.env.CURSOR_SESSIONS.idFromName("globalRoom");
+		const stub = cf.env.CURSOR_SESSIONS.get(id);
+		await stub.closeSessions();
+	}
+	```
+	:::
+
 	<PackageManagers type="run" pkg="deploy" frame="none" />
 
 
